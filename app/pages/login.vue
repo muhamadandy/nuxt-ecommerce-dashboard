@@ -1,43 +1,84 @@
 <script setup lang="ts">
-const { fetch: refreshSession } = useUserSession()
+// Halaman login. Layout default sengaja tidak menampilkan header di /login.
+const { loggedIn, fetch: refreshSession } = useUserSession()
 
-const email = ref('')
-const password = ref('')
-const loading = ref(false)
-const errorMessage = ref('')
+// Pengaman tambahan: kalau sudah login, tidak perlu melihat halaman ini.
+if (loggedIn.value) {
+  await navigateTo('/')
+}
 
-async function onSubmit() {
-  errorMessage.value = ''
-  loading.value = true
+const form = reactive({ email: '', password: '' })
+const errors = reactive<{ email?: string, password?: string }>({})
+const formError = ref('')
+const submitting = ref(false)
+
+function validate(): boolean {
+  errors.email = undefined
+  errors.password = undefined
+  if (!form.email.trim()) errors.email = 'Email wajib diisi'
+  else if (!/^\S+@\S+\.\S+$/.test(form.email.trim())) errors.email = 'Format email tidak valid'
+  if (!form.password) errors.password = 'Kata sandi wajib diisi'
+  return !errors.email && !errors.password
+}
+
+async function submit() {
+  formError.value = ''
+  if (!validate()) return
+  submitting.value = true
   try {
     await $fetch('/api/auth/login', {
       method: 'POST',
-      body: { email: email.value, password: password.value },
+      body: { email: form.email.trim(), password: form.password }
     })
-    await refreshSession() // muat ulang status sesi di sisi klien
+    await refreshSession()
     await navigateTo('/')
-  } catch (e: any) {
-    errorMessage.value = e?.data?.message ?? 'Terjadi kesalahan. Coba lagi.'
+  } catch (err: any) {
+    formError.value = err?.data?.statusMessage || err?.data?.message || 'Email atau kata sandi salah.'
   } finally {
-    loading.value = false
+    submitting.value = false
   }
 }
 </script>
 
 <template>
-  <main style="max-width: 360px; margin: 4rem auto; padding: 0 1rem; font-family: sans-serif">
-    <h1>Masuk</h1>
-    <form @submit.prevent="onSubmit" style="display: grid; gap: 0.75rem">
-      <label>
-        Email
-        <input v-model="email" type="email" required autocomplete="username" style="width: 100%" />
-      </label>
-      <label>
-        Kata sandi
-        <input v-model="password" type="password" required autocomplete="current-password" style="width: 100%" />
-      </label>
-      <p v-if="errorMessage" role="alert" style="color: #b91c1c; margin: 0">{{ errorMessage }}</p>
-      <button type="submit" :disabled="loading">{{ loading ? 'Memproses...' : 'Masuk' }}</button>
-    </form>
-  </main>
+  <div class="flex min-h-screen items-center justify-center bg-gray-50 px-4 py-8 dark:bg-gray-950">
+    <UCard class="w-full max-w-sm">
+      <div class="mb-6 text-center">
+        <UIcon name="i-lucide-store" class="mx-auto mb-2 size-8 text-primary" />
+        <h1 class="text-xl font-semibold">Masuk</h1>
+        <p class="mt-1 text-sm text-muted">Toko Dashboard</p>
+      </div>
+
+      <form class="space-y-4" novalidate @submit.prevent="submit">
+        <UAlert
+          v-if="formError"
+          color="error"
+          variant="subtle"
+          icon="i-lucide-circle-alert"
+          :description="formError"
+        />
+
+        <UFormField label="Email" name="email" :error="errors.email">
+          <UInput
+            v-model="form.email"
+            type="email"
+            autocomplete="username"
+            placeholder="nama@example.com"
+            class="w-full"
+          />
+        </UFormField>
+
+        <UFormField label="Kata sandi" name="password" :error="errors.password">
+          <UInput
+            v-model="form.password"
+            type="password"
+            autocomplete="current-password"
+            class="w-full"
+          />
+        </UFormField>
+
+        <UButton type="submit" block :loading="submitting">Masuk</UButton>
+      </form>
+    </UCard>
+  </div>
 </template>
